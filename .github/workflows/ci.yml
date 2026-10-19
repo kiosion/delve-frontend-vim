@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go install github.com/go-delve/delve/cmd/dlv@v1.27.2
+      - run: sudo sysctl -w kernel.yama.ptrace_scope=0
+      - run: go vet ./...
+      - run: go test ./...
+      - uses: rhysd/action-setup-vim@v1
+        id: vim
+        with:
+          version: v9.1.0142
+      # :defcompile compiles only the functions of the script it runs in.
+      - name: Compile the Vim script
+        run: |
+          { cat autoload/delve_frontend.vim; echo defcompile; } > "$RUNNER_TEMP/autoload.vim"
+          "${{ steps.vim.outputs.executable }}" -Nu NONE -i NONE -es \
+            -c 'set runtimepath^=.' \
+            -c 'runtime plugin/delve_frontend.vim' \
+            -c "source $RUNNER_TEMP/autoload.vim" \
+            -c 'if v:errmsg != "" || exists(":DelveFrontendRunTest") != 2 | cquit | endif' \
+            -c 'qall!'
