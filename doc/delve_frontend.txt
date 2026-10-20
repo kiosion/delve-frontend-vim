@@ -6,19 +6,20 @@ License: MIT
 CONTENTS                                             *delve-frontend-contents*
 
   1. Introduction ........................... |delve-frontend-intro|
-  2. Helper ................................. |delve-frontend-helper|
-  3. Tests .................................. |delve-frontend-tests|
-  4. Debug sessions ......................... |delve-frontend-sessions|
-  5. Breakpoints ............................ |delve-frontend-breakpoints|
-  6. Watches and evaluation ................. |delve-frontend-watches|
-  7. Debug tab .............................. |delve-frontend-tab|
-  8. Commands ............................... |delve-frontend-commands|
-  9. Mappings ............................... |delve-frontend-mappings|
-  10. Options ............................... |delve-frontend-options|
-  11. Signs and highlights .................. |delve-frontend-highlights|
-  12. Functions ............................. |delve-frontend-functions|
-  13. Limitations ........................... |delve-frontend-limitations|
-  14. Troubleshooting ....................... |delve-frontend-troubleshooting|
+  2. Quick start ............................ |delve-frontend-quickstart|
+  3. Setup .................................. |delve-frontend-setup|
+  4. Tests .................................. |delve-frontend-tests|
+  5. Debug sessions ......................... |delve-frontend-sessions|
+  6. Breakpoints ............................ |delve-frontend-breakpoints|
+  7. Watches ................................ |delve-frontend-watches|
+  8. Debug tab .............................. |delve-frontend-tab|
+  9. Commands ............................... |delve-frontend-commands|
+  10. Mappings .............................. |delve-frontend-mappings|
+  11. Options ............................... |delve-frontend-options|
+  12. Signs and highlights .................. |delve-frontend-highlights|
+  13. Functions ............................. |delve-frontend-functions|
+  14. Limitations ........................... |delve-frontend-limitations|
+  15. Troubleshooting ....................... |delve-frontend-troubleshooting|
 
 ==============================================================================
 1. INTRODUCTION                              *delve-frontend* *delve_frontend*
@@ -33,16 +34,41 @@ The plugin needs Vim 9.1.0142 or later, on macOS or Linux, with Go 1.25 or
 later in `PATH`. Debug sessions also need dlv in `PATH`. In Neovim and older
 versions of Vim, the plugin does not load and prints no message.
 
-The plugin defines commands and |<Plug>| mappings, and no mappings of its own.
-See |delve-frontend-mappings| for an example.
+The plugin defines commands and |<Plug>| mappings, and maps no keys. See
+|delve-frontend-mappings| for an example.
 
 To disable the plugin, set this in your |vimrc|:
 >
 	let g:loaded_delve_frontend = 1
 <
 ==============================================================================
-2. HELPER                                              *delve-frontend-helper*
+2. QUICK START                                     *delve-frontend-quickstart*
 
+The plugin builds its helper the first time you open a `_test.go` file (see
+|delve-frontend-setup|). When the build ends, a `▶` sign marks each test.
+
+To run one test, subtest or table case:
+
+1. Move the cursor into the test.
+2. Run |:DelveFrontendRunTest|. A terminal window opens at the bottom and
+   runs `go test -v` with the flags that select the test.
+
+To debug it:
+
+1. Move the cursor to a line that the test runs, and run
+   |:DelveFrontendToggleBreakpoint|. For a table case, use a line in the
+   function that `t.Run` calls. A `●` sign marks the line.
+2. Move the cursor into the test, and run |:DelveFrontendDebugTest|. The
+   debug tab opens, and dlv builds the test and runs it to the breakpoint.
+3. Step with |:DelveFrontendNext|, |:DelveFrontendStep| and
+   |:DelveFrontendStepOut|, or run |:DelveFrontendContinue| to go to the
+   next breakpoint.
+4. Run |:DelveFrontendStop|, or close the tab, to end the session.
+
+==============================================================================
+3. SETUP                                                *delve-frontend-setup*
+
+						       *delve-frontend-helper*
 A Go program, the helper, finds the tests in a file and drives dlv through its
 JSON-RPC API. Vim starts the helper as a job on first use, and stops it when
 Vim exits.
@@ -50,28 +76,58 @@ Vim exits.
 The plugin builds the helper with `go build` into `bin/delve-frontend` in the
 plugin directory. It builds it when the helper starts and the binary is
 missing, or older than a Go source file, `go.mod` or `go.sum` of the plugin.
-The helper starts on the first use in each Vim session. An update applied in
-a running Vim takes effect after Vim restarts.
+On the first build, `go build` downloads delve and the other modules of the
+helper.
 
 The build runs in the background. Vim prints these messages: >
 	delve-frontend: building the helper
 	delve-frontend: built the helper
 	delve-frontend: building the helper failed: {go build output}
 <
-A command that needs the helper while the build runs prints a message that
-the helper is building. After a failed build, the plugin makes no further
-attempt until Vim restarts.
-
-When |g:delve_frontend_helper| names another path, the plugin never builds the
-helper, and prints this message when the file is missing or not executable: >
-	delve-frontend: no helper at {path}
+A command that needs the helper prints this message while the build runs: >
+	delve-frontend: the helper build is still running
+<
+After a failed build, the plugin does not build the helper again until Vim
+restarts, and a command that needs the helper prints this message: >
+	delve-frontend: the helper is unavailable (see :messages)
 <
 Every message of the plugin starts with `delve-frontend:`. When the helper
 exits, the plugin prints its exit status and the lines it wrote to its
 standard error.
 
+						*delve-frontend-custom-helper*
+To use a helper at another path, for example when the plugin directory is
+read-only:
+
+1. Build the helper: >
+	cd /path/to/delve-frontend-vim
+	go build -o ~/.local/bin/delve-frontend ./cmd/delve-frontend
+<
+2. Set |g:delve_frontend_helper| in your |vimrc|: >
+	let g:delve_frontend_helper = expand('~/.local/bin/delve-frontend')
+<
+The plugin does not build a helper at another path. Build it again after
+each update. When the file is missing or not executable, the plugin prints
+this message: >
+  delve-frontend: g:delve_frontend_helper: {path} is missing or not executable
+<
+						       *delve-frontend-update*
+To update the plugin:
+
+1. Update the plugin directory with your plugin manager, or with `git pull`.
+2. Restart Vim, because a running Vim keeps the helper and the plugin script
+   that it started with.
+
+						*delve-frontend-uninstall*
+To uninstall the plugin:
+
+1. Remove the plugin with your plugin manager, or delete the plugin
+   directory.
+2. Delete a helper that you built at another path.
+3. Delete the state file (see |g:delve_frontend_state_file|).
+
 ==============================================================================
-3. TESTS                                                *delve-frontend-tests*
+4. TESTS                                                *delve-frontend-tests*
 
 When you enter a `_test.go` buffer, change it in Normal mode, or leave Insert
 mode, the helper reads the text of the buffer, including changes not yet
@@ -89,10 +145,11 @@ A pattern selects the test, its parent tests and its subtests.
 						*delve-frontend-discovery*
 The helper finds:
 
-- Functions named `Test`, `Benchmark` or `Fuzz`, or with one of these
-  prefixes followed by a character other than a lower case letter, that take
-  a single `*testing.T`, `*testing.B` or `*testing.F` parameter. `TestParse`
-  and `Test_parse` count, and `Testable` does not.
+- `Test` functions that take a single `*testing.T` parameter, `Benchmark`
+  functions that take a single `*testing.B`, and `Fuzz` functions that take
+  a single `*testing.F`. The prefix is the whole name, or a character other
+  than a lower case letter follows it: `TestParse` and `Test_parse` count,
+  and `Testable` does not.
 - `Example` functions without parameters that contain an `Output:` or
   `Unordered output:` comment. `go test` compiles other examples without
   running them.
@@ -100,9 +157,9 @@ The helper finds:
   string literal name, or a sum of string literals, at any depth.
 - Calls to `Run` in a `range` loop over a table. The helper takes the name of
   each case from one of these:
-  - the loop value, in a table of strings;
-  - a field of the loop value, in a table of struct literals, keyed or
-    positional, or of pointers to them;
+  - the loop value, in a slice, array or map of strings;
+  - a field of the loop value, in a slice, array or map of struct literals,
+    keyed or positional, or of pointers to them;
   - the map key, in a map.
 
 The table is a slice, array or map literal. The literal can be in the `range`
@@ -122,7 +179,7 @@ A file that does not parse, such as one in the middle of an edit, still shows
 the tests declared before the parse error.
 
 ==============================================================================
-4. DEBUG SESSIONS                                    *delve-frontend-sessions*
+5. DEBUG SESSIONS                                    *delve-frontend-sessions*
 
 A debug session runs one program under dlv. Four commands start one:
 
@@ -131,18 +188,17 @@ A debug session runs one program under dlv. Four commands start one:
 	|:DelveFrontendAttach|      `dlv attach` to a running process
 	|:DelveFrontendConnect|     a headless dlv that is already running
 
-Each command opens the debug tab, see |delve-frontend-tab|. Starting a session
-stops the current one. dlv builds tests and main packages into a temporary
-directory, and the helper removes it when dlv exits.
-|:DelveFrontendRestart| starts the last session again.
+Each command opens the debug tab (see |delve-frontend-tab|). Starting a
+session stops the current one. dlv builds tests and main packages into a
+temporary directory, and the helper removes it when dlv exits.
 
-dlv builds with |g:delve_frontend_build_flags|, and the program runs with the
-variables of |g:delve_frontend_env| added to the environment Vim started with.
+dlv builds with |g:delve_frontend_build_flags|. dlv and the program run with
+the variables of |g:delve_frontend_env| added to the environment of Vim.
 
-The plugin sets every saved breakpoint, see |delve-frontend-breakpoints|, and
-continues the program to the first breakpoint. A session without breakpoints
-runs the program to its end. To pause a running program, run
-|:DelveFrontendPause|.
+The plugin sets the saved breakpoints of the current module (see
+|delve-frontend-breakpoints|), and continues the program to the first
+breakpoint. A session without breakpoints runs the program to its end. To
+pause a running program, run |:DelveFrontendPause|.
 
 						*delve-frontend-stop*
 |:DelveFrontendStop| and closing the debug tab end the session:
@@ -157,17 +213,15 @@ runs the program to its end. To pause a running program, run
   the plugin disconnects, and kills a program that it started.
 
 ==============================================================================
-5. BREAKPOINTS                                    *delve-frontend-breakpoints*
+6. BREAKPOINTS                                    *delve-frontend-breakpoints*
 
-|:DelveFrontendToggleBreakpoint| sets a breakpoint on the cursor line, or
-clears the breakpoint there. |:DelveFrontendConditionalBreakpoint| asks for a
-Go expression, and the program stops on the line only when the expression is
-true. A sign marks each breakpoint, see |delve-frontend-highlights|. The sign
+A sign marks each breakpoint (see |delve-frontend-highlights|). The sign
 moves with the line when you edit the file.
 
-A breakpoint set while the program runs takes effect at once. The helper
-halts the program, sets the breakpoint and continues. When dlv rejects a
-breakpoint, Vim prints dlv's error.
+When you set or clear a breakpoint while the program continues, the helper
+halts the program, changes the breakpoint and continues the program. During
+a step, the change waits until the step ends. When dlv rejects a breakpoint,
+the plugin removes its sign and prints dlv's error.
 
 |:DelveFrontendListBreakpoints| lists every breakpoint, in open files and
 saved ones, in the |quickfix| list.
@@ -178,30 +232,31 @@ The plugin saves the breakpoints of each file, by absolute path, in
 when you write a Go file, and places them again when you open the file. A
 saved breakpoint after the last line of its file is dropped.
 
-Before each write, the plugin reads the file again and merges its changes
-into what it finds there. When the file is not valid JSON, the plugin leaves
-it unchanged and prints a warning. A write that fails also prints a warning.
+Several Vim instances can share the file. Before each write, the plugin reads
+the file again. It writes only the breakpoints and watches that changed in
+this Vim, and keeps the rest of the file. When the file is not valid JSON,
+the plugin leaves it unchanged and prints a warning. A write that fails also
+prints a warning.
 
-Each session sets every saved breakpoint, including breakpoints in files that
-are not open. The plugin loads these files into hidden buffers.
+Each session sets the breakpoints under the directory of the nearest `go.mod`
+above the current file, or under the directory of the file when there is no
+`go.mod`. The plugin loads the files of these breakpoints that are not open
+into hidden buffers. It does not set breakpoints in other modules, such as
+dependencies or other modules of a `go.work` workspace.
 
 ==============================================================================
-6. WATCHES AND EVALUATION                             *delve-frontend-watches*
-
-|:DelveFrontendEvaluate| shows the value of a Go expression in a popup at the
-cursor. The expression is evaluated in the selected frame of the selected
-goroutine.
+7. WATCHES                                            *delve-frontend-watches*
 
 |:DelveFrontendWatch| adds a Go expression to the watches. The plugin
 evaluates each watch at every stop, and lists it at the top of the variables
-pane. Press `dd` on a watch to remove it. When a watch fails to evaluate, the
-plugin shows the error in place of its value.
+pane. When a watch fails to evaluate, the plugin shows the error in place of
+its value.
 
 The plugin saves the watches in |g:delve_frontend_state_file|. Every project
 shares one list of watches.
 
 ==============================================================================
-7. DEBUG TAB                                              *delve-frontend-tab*
+8. DEBUG TAB                                              *delve-frontend-tab*
 
 The source window fills the top of the tab. The plugin opens the file of the
 selected frame there and marks the current line. At the end of each line that
@@ -209,7 +264,7 @@ uses a variable, from the start of the function to the current line, it adds
 the variable's value, shortened to 60 characters.
 
 Four panes share the bottom of the tab, |g:delve_frontend_pane_rows| lines
-high:
+high. The frames and goroutines panes split that height between them:
 
 Frames pane, at the left.
 	The call stack of the selected goroutine, at most 50 frames. `→`
@@ -220,17 +275,19 @@ Frames pane, at the left.
 Goroutines pane, below the frames pane.
 	The goroutines in groups, at most 50 groups and 10 goroutines for
 	each. The first line names the grouping. Each goroutine shows its ID,
-	status and pprof labels, and `→` marks the selected goroutine. When
-	the program stops, the selected goroutine is the one that stopped.
+	its status, its location in every grouping except the default, and
+	its pprof labels. `→` marks the selected goroutine. When the program
+	stops, the selected goroutine is the one that stopped.
 	With more than 5 groups, the groups without the selected goroutine
 	start collapsed.
 	<Enter>	On a goroutine, show its stack, with its first frame
 		outside the runtime selected. The next step follows
 		that goroutine. On a group, collapse or expand it.
 	<Tab>	Group by the next of: the innermost frame outside the
-		runtime, the innermost frame, the go statement that
-		started the goroutine, the function it started in, and
-		a pprof label. The plugin prompts for the label name.
+		runtime (the default), the innermost frame, the go
+		statement that started the goroutine, the function it
+		started in, and a pprof label. The plugin prompts for the
+		label name.
 	r	Show or hide the goroutines of the runtime.
 
 Variables pane, in the middle.
@@ -249,7 +306,7 @@ Output pane, at the right.
 	output only, and after |:DelveFrontendConnect| it stays empty.
 
 ==============================================================================
-8. COMMANDS                                         *delve-frontend-commands*
+9. COMMANDS                                          *delve-frontend-commands*
 
 						*:DelveFrontendRunTest*
 :DelveFrontendRunTest
@@ -311,8 +368,8 @@ Output pane, at the right.
 		Set a breakpoint on the cursor line, or clear the breakpoint
 		there.
 
-				    *:DelveFrontendConditionalBreakpoint*
-:DelveFrontendConditionalBreakpoint
+				    *:DelveFrontendSetConditionalBreakpoint*
+:DelveFrontendSetConditionalBreakpoint
 		Ask for a Go expression, and set a breakpoint on the cursor
 		line that stops only when the expression is true. On a line
 		with a breakpoint, the prompt starts with its condition. An
@@ -340,10 +397,11 @@ Output pane, at the right.
 
 						*:DelveFrontendEvaluate*
 :DelveFrontendEvaluate [expr]
-		Show the value of the Go expression [expr] in a popup. Without
-		[expr], evaluate the expression at the cursor. To evaluate
-		the selected text, use |<Plug>(delve-frontend-evaluate)| in
-		Visual mode.
+		Show the value of the Go expression [expr] in a popup, in the
+		selected frame of the selected goroutine. Without [expr],
+		evaluate the expression at the cursor. To evaluate the
+		selected text, use |<Plug>(delve-frontend-evaluate)| in Visual
+		mode.
 
 						*:DelveFrontendWatch*
 :DelveFrontendWatch [expr]
@@ -353,13 +411,12 @@ Output pane, at the right.
 		|<Plug>(delve-frontend-watch)| in Visual mode.
 
 ==============================================================================
-9. MAPPINGS                                         *delve-frontend-mappings*
+10. MAPPINGS                                         *delve-frontend-mappings*
 
 The plugin defines a |<Plug>| mapping for each command except
 |:DelveFrontendDebug|, |:DelveFrontendAttach| and |:DelveFrontendConnect|.
 The mappings work in Normal mode. The evaluate and watch mappings also work
-in Visual mode, on the selected text. Only the mappings use a selection,
-because the commands take no range.
+in Visual mode, on the selected text.
 
 *<Plug>(delve-frontend-run-test)*
 	|:DelveFrontendRunTest|
@@ -367,8 +424,8 @@ because the commands take no range.
 	|:DelveFrontendDebugTest|
 *<Plug>(delve-frontend-toggle-breakpoint)*
 	|:DelveFrontendToggleBreakpoint|
-*<Plug>(delve-frontend-conditional-breakpoint)*
-	|:DelveFrontendConditionalBreakpoint|
+*<Plug>(delve-frontend-set-conditional-breakpoint)*
+	|:DelveFrontendSetConditionalBreakpoint|
 *<Plug>(delve-frontend-continue)*
 	|:DelveFrontendContinue|
 *<Plug>(delve-frontend-next)*
@@ -402,10 +459,10 @@ Example: >
 	nmap <Leader>de <Plug>(delve-frontend-evaluate)
 	xmap <Leader>de <Plug>(delve-frontend-evaluate)
 <
-The panes of the debug tab have keys of their own, see |delve-frontend-tab|.
+The panes of the debug tab have keys of their own (see |delve-frontend-tab|).
 
 ==============================================================================
-10. OPTIONS                                          *delve-frontend-options*
+11. OPTIONS                                           *delve-frontend-options*
 
 						*g:delve_frontend_go*
 g:delve_frontend_go		List. Default: `['go']`
@@ -415,14 +472,16 @@ g:delve_frontend_go		List. Default: `['go']`
 					*g:delve_frontend_build_flags*
 g:delve_frontend_build_flags	List. Default: `[]`
 	Build flags for |:DelveFrontendRunTest| and for dlv, such as
-	`['-tags=integration', '-race']`. A buffer variable of the same name
-	takes precedence, in the buffer that starts the session.
+	`['-tags=integration', '-race']`. The plugin uses
+	`b:delve_frontend_build_flags` instead, when the buffer where you run
+	the command sets it.
 
 						*g:delve_frontend_env*
 g:delve_frontend_env		Dict. Default: `{}`
 	Environment variables for |:DelveFrontendRunTest| and for debug
-	sessions, such as `{'DATABASE_URL': 'postgres://localhost/test'}`. A
-	buffer variable of the same name takes precedence.
+	sessions, such as `{'DATABASE_URL': 'postgres://localhost/test'}`. The
+	plugin uses `b:delve_frontend_env` instead, when the buffer where you
+	run the command sets it.
 
 						*g:delve_frontend_dlv*
 g:delve_frontend_dlv		String. Default: `'dlv'`
@@ -432,22 +491,19 @@ g:delve_frontend_dlv		String. Default: `'dlv'`
 g:delve_frontend_helper		String. Default: `bin/delve-frontend`
 				in the plugin directory
 	The path of the helper. The plugin builds the helper only at the
-	default path. Build a helper at another path again after each update:
->
-		cd /path/to/delve-frontend-vim
-		go build -o ~/.local/bin/delve-frontend ./cmd/delve-frontend
-<
+	default path. See |delve-frontend-custom-helper|.
+
 						*g:delve_frontend_state_file*
 g:delve_frontend_state_file	String. Default:
 				`$XDG_STATE_HOME/delve-frontend/state.json`,
 				or `~/.local/state/delve-frontend/state.json`
-	The file that keeps breakpoints and watches. The plugin reads this
-	variable once, the first time it needs the file.
+	The file where the plugin saves breakpoints and watches. The plugin
+	reads this variable once, the first time it needs the file.
 
 						*g:delve_frontend_test_sign*
 g:delve_frontend_test_sign	String. Default: `'▶'`
-	The sign text for a test. The plugin reads this variable when it
-	loads, so set it in your |vimrc|.
+	The sign text for a test. Set it in your |vimrc|, because the plugin
+	reads it only when the plugin loads.
 
 					*g:delve_frontend_sign_priority*
 g:delve_frontend_sign_priority	Number. Default: `5`
@@ -467,7 +523,7 @@ g:delve_frontend_pane_rows	Number. Default: `15`
 	The height of the panes in the debug tab.
 
 ==============================================================================
-11. SIGNS AND HIGHLIGHTS                          *delve-frontend-highlights*
+12. SIGNS AND HIGHLIGHTS                           *delve-frontend-highlights*
 
 	Sign   Marks                      Highlight group ~
 	`▶`      a test                     DelveFrontendTest
@@ -483,10 +539,10 @@ scheme to change it.
 	*hl-DelveFrontendBreakpoint*       ErrorMsg      breakpoint signs
 	*hl-DelveFrontendCurrentLineSign*  WarningMsg    the current line sign
 	*hl-DelveFrontendCurrentLine*      CursorLine    the current line
-	*hl-DelveFrontendInline*           Comment       inline values
+	*hl-DelveFrontendInlineValue*      Comment       inline values
 
 ==============================================================================
-12. FUNCTIONS                                      *delve-frontend-functions*
+13. FUNCTIONS                                       *delve-frontend-functions*
 
 					*delve_frontend#TestAtCursor()*
 delve_frontend#TestAtCursor()
@@ -503,21 +559,22 @@ delve_frontend#TestAtCursor()
 	  set statusline+=%{get(delve_frontend#TestAtCursor(),'name','')}
 <
 ==============================================================================
-13. LIMITATIONS                                  *delve-frontend-limitations*
+14. LIMITATIONS                                   *delve-frontend-limitations*
 
-- The plugin does not run in Neovim, and does not support Windows.
 - The helper does not find test methods, such as those of testify suites, or
   subtests of fuzz targets.
-- |g:delve_frontend_build_flags| holds build flags only. Repeated runs can
-  print `(cached)` results; `GOFLAGS=-count=1` in the environment Vim starts
-  with disables the test cache, and go ignores it where it does not apply.
+- The plugin has no option for test flags such as `-count`, and
+  |g:delve_frontend_build_flags| is for build flags only. Repeated runs of
+  an unchanged test print `(cached)` results. To run the test every time, set
+  `GOFLAGS` in |g:delve_frontend_env|: >
+	let g:delve_frontend_env = {'GOFLAGS': '-count=1'}
+<  The go command ignores a flag in `GOFLAGS` that does not apply to it.
 - |:DelveFrontendConnect| sends breakpoints with the file paths on your
   machine. A dlv in a container or on another host needs the source at the
   same paths.
-- Only a program that dlv starts writes its output to the output pane.
 
 ==============================================================================
-14. TROUBLESHOOTING                          *delve-frontend-troubleshooting*
+15. TROUBLESHOOTING                           *delve-frontend-troubleshooting*
 
 A session ends at once with `Exited with status 1`.
 	dlv failed to build or attach. Its message is in the output pane.
@@ -534,11 +591,6 @@ Attach fails on Linux.
 	  security setting, try writing "0" to
 	  /proc/sys/kernel/yama/ptrace_scope
 <	Change that setting, or start the program with |:DelveFrontendDebug|.
-
-A process is missing from the attach menu.
-	The menu lists Go programs you own that a debugger can attach to. On
-	macOS it leaves out programs that refuse debuggers, see
-	|:DelveFrontendAttach|.
 
 Breakpoints do not stop a program after |:DelveFrontendConnect|.
 	The paths of the source files differ between Vim and dlv. See

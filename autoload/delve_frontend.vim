@@ -246,7 +246,6 @@ export def RunTest()
   terminal = term_start(cmd, {curwin: true, cwd: dir, env: env, term_name: $'go test {test.name}'})
 enddef
 
-# Setting returns the buffer variable name, or the global variable, or default.
 def Setting(name: string, default: any): any
   return get(b:, name, get(g:, name, default))
 enddef
@@ -520,9 +519,9 @@ export def ToggleBreakpoint()
   endif
 enddef
 
-# ConditionalBreakpoint sets a breakpoint on the cursor line that stops only when a Go
-# expression is true. It asks for the expression.
-export def ConditionalBreakpoint()
+# SetConditionalBreakpoint sets a breakpoint on the cursor line that stops only when a
+# Go expression is true. It asks for the expression.
+export def SetConditionalBreakpoint()
   const placed = BreakpointAtCursor()
   const cond = input('Stop when: ', empty(placed) ? '' : get(conditions, string(placed.id), ''))
   if empty(cond)
@@ -541,7 +540,7 @@ enddef
 
 def PlaceBreakpoint(buf: number, lnum: number, cond: string): number
   const id = sign_place(0, breakpointGroup,
-    empty(cond) ? 'DelveFrontendBreakpoint' : 'DelveFrontendCondition',
+    empty(cond) ? 'DelveFrontendBreakpoint' : 'DelveFrontendConditionalBreakpoint',
     buf, {lnum: lnum, priority: get(g:, 'delve_frontend_breakpoint_priority', 40)})
   if !empty(cond)
     conditions[string(id)] = cond
@@ -978,14 +977,14 @@ def ShowView(view: dict<any>)
   const last = getbufinfo(frameBuffer)[0].linecount
   for inline in get(view, 'inline', [])
     if inline.line <= last
-      prop_add(inline.line, 0, {type: 'DelveFrontendInline', bufnr: frameBuffer, text: '  ' .. inline.text, text_align: 'after'})
+      prop_add(inline.line, 0, {type: 'DelveFrontendInlineValue', bufnr: frameBuffer, text: '  ' .. inline.text, text_align: 'after'})
     endif
   endfor
 enddef
 
 def ClearInline()
   for buf in getbufinfo({bufloaded: 1})
-    prop_remove({type: 'DelveFrontendInline', bufnr: buf.bufnr, all: true})
+    prop_remove({type: 'DelveFrontendInlineValue', bufnr: buf.bufnr, all: true})
   endfor
 enddef
 

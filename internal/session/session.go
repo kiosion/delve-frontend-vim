@@ -489,7 +489,6 @@ func (s *Session) haltLocked() {
 	}()
 }
 
-// runningCommand reports whether command run is running.
 func (s *Session) runningCommand(run int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -559,7 +558,7 @@ func (s *Session) clearLocked(id int) error {
 		return nil
 	}
 	if _, err := s.client.ClearBreakpoint(bp); err != nil {
-		return err
+		return fmt.Errorf("clear breakpoint: %w", err)
 	}
 	delete(s.breakpoints, id)
 	return nil
@@ -657,7 +656,7 @@ func (s *Session) stoppedEventLocked(user bool) Event {
 	event := Event{Event: "stopped", Goroutine: s.goroutine}
 	var err error
 	if s.stack, err = s.client.Stacktrace(s.goroutine, maxFrames, 0, 0, nil); err != nil {
-		s.notify(Event{Event: "error", Text: err.Error()})
+		s.notify(Event{Event: "error", Text: fmt.Sprintf("load stack of goroutine %d: %v", s.goroutine, err)})
 	}
 	for _, f := range s.stack {
 		event.Frames = append(event.Frames, frame(f.Location))
@@ -709,7 +708,7 @@ func (s *Session) goroutinesLocked() ([]GoroutineGroup, error) {
 		&api.GoroutineGroupingOptions{GroupBy: by, GroupByKey: s.grouping.Key, MaxGroupMembers: maxGroupMembers, MaxGroups: maxGroups},
 		nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list goroutines: %w", err)
 	}
 	result := []GoroutineGroup{}
 	for _, group := range groups {
@@ -763,8 +762,9 @@ func (s *Session) goroutineStatus(g *api.Goroutine) string {
 	return status
 }
 
-// exitLocked records the exit status of the program and ends the session. read
-// reports the exit when dlv has exited and all output is forwarded.
+// exitLocked records the exit status of the program and releases dlv. In connect
+// mode, release reports the exit. In other modes, read reports it after dlv exits
+// and its output is forwarded.
 func (s *Session) exitLocked(status int) {
 	s.status = &status
 	s.release(s.client, status)
@@ -863,7 +863,7 @@ func (s *Session) Goroutine(id int64) (Event, error) {
 		return Event{}, err
 	}
 	if _, err := s.client.SwitchGoroutine(id); err != nil {
-		return Event{}, err
+		return Event{}, fmt.Errorf("switch to goroutine %d: %w", id, err)
 	}
 	s.goroutine = id
 	return s.stoppedEventLocked(true), nil
@@ -932,11 +932,11 @@ func (s *Session) viewLocked(frame int) (View, error) {
 	}
 	args, err := s.client.ListFunctionArgs(scope, loadConfig)
 	if err != nil {
-		return view, err
+		return view, fmt.Errorf("list arguments: %w", err)
 	}
 	locals, err := s.client.ListLocalVariables(scope, loadConfig)
 	if err != nil {
-		return view, err
+		return view, fmt.Errorf("list locals: %w", err)
 	}
 	vars := append(args, locals...)
 	for _, v := range vars {

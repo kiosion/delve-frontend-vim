@@ -15,7 +15,7 @@ import (
 	"github.com/go-delve/delve/service/rpc2"
 )
 
-func TestSession(t *testing.T) {
+func TestDebugTest(t *testing.T) {
 	dlv := requireDlv(t)
 	file, lineOf := source(t, "testdata/fixture/fixture_test.go")
 	line := lineOf("breakpoint")
