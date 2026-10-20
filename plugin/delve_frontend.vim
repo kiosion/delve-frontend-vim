@@ -28,7 +28,7 @@ command DelveFrontendDebugTest delve_frontend#DebugTest()
 command -nargs=* DelveFrontendDebug delve_frontend#Debug(<q-args>)
 command -nargs=? DelveFrontendAttach delve_frontend#Attach(<q-args>)
 command -nargs=1 DelveFrontendConnect delve_frontend#Connect(<q-args>)
-command DelveFrontendBreakpoint delve_frontend#ToggleBreakpoint()
+command DelveFrontendToggleBreakpoint delve_frontend#ToggleBreakpoint()
 command DelveFrontendConditionalBreakpoint delve_frontend#ConditionalBreakpoint()
 command DelveFrontendContinue delve_frontend#Command('continue')
 command DelveFrontendNext delve_frontend#Command('next')
@@ -37,13 +37,13 @@ command DelveFrontendStepOut delve_frontend#Command('stepout')
 command DelveFrontendPause delve_frontend#Command('pause')
 command DelveFrontendStop delve_frontend#Command('stop')
 command DelveFrontendRestart delve_frontend#Restart()
-command DelveFrontendBreakpoints delve_frontend#ListBreakpoints()
+command DelveFrontendListBreakpoints delve_frontend#ListBreakpoints()
 command -nargs=* DelveFrontendEvaluate delve_frontend#Evaluate(<q-args>)
 command -nargs=* DelveFrontendWatch delve_frontend#AddWatch(<q-args>)
 
 nnoremap <Plug>(delve-frontend-run-test) <Cmd>DelveFrontendRunTest<CR>
 nnoremap <Plug>(delve-frontend-debug-test) <Cmd>DelveFrontendDebugTest<CR>
-nnoremap <Plug>(delve-frontend-breakpoint) <Cmd>DelveFrontendBreakpoint<CR>
+nnoremap <Plug>(delve-frontend-toggle-breakpoint) <Cmd>DelveFrontendToggleBreakpoint<CR>
 nnoremap <Plug>(delve-frontend-conditional-breakpoint) <Cmd>DelveFrontendConditionalBreakpoint<CR>
 nnoremap <Plug>(delve-frontend-continue) <Cmd>DelveFrontendContinue<CR>
 nnoremap <Plug>(delve-frontend-next) <Cmd>DelveFrontendNext<CR>
@@ -52,7 +52,7 @@ nnoremap <Plug>(delve-frontend-step-out) <Cmd>DelveFrontendStepOut<CR>
 nnoremap <Plug>(delve-frontend-pause) <Cmd>DelveFrontendPause<CR>
 nnoremap <Plug>(delve-frontend-stop) <Cmd>DelveFrontendStop<CR>
 nnoremap <Plug>(delve-frontend-restart) <Cmd>DelveFrontendRestart<CR>
-nnoremap <Plug>(delve-frontend-breakpoints) <Cmd>DelveFrontendBreakpoints<CR>
+nnoremap <Plug>(delve-frontend-list-breakpoints) <Cmd>DelveFrontendListBreakpoints<CR>
 nnoremap <Plug>(delve-frontend-evaluate) <Cmd>DelveFrontendEvaluate<CR>
 xnoremap <Plug>(delve-frontend-evaluate) <Cmd>DelveFrontendEvaluate<CR>
 nnoremap <Plug>(delve-frontend-watch) <Cmd>DelveFrontendWatch<CR>

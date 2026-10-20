@@ -102,7 +102,7 @@ The plugin defines no mappings. Add some to your vimrc, for example:
 ```vim
 nmap <Leader>tt <Plug>(delve-frontend-run-test)
 nmap <Leader>td <Plug>(delve-frontend-debug-test)
-nmap <Leader>db <Plug>(delve-frontend-breakpoint)
+nmap <Leader>db <Plug>(delve-frontend-toggle-breakpoint)
 nmap <Leader>dc <Plug>(delve-frontend-continue)
 nmap <Leader>dn <Plug>(delve-frontend-next)
 nmap <Leader>ds <Plug>(delve-frontend-step)
@@ -121,7 +121,7 @@ To run one table case:
 
 To debug it:
 
-1. On a line in the test, run `:DelveFrontendBreakpoint`. A `●` sign marks the line.
+1. On a line in the test, run `:DelveFrontendToggleBreakpoint`. A `●` sign marks the line.
 2. With the cursor in the case, run `:DelveFrontendDebugTest`. A debug tab opens, and
    dlv builds the test and runs it to the breakpoint.
 3. Step with `:DelveFrontendNext`, `:DelveFrontendStep` and `:DelveFrontendStepOut`, or

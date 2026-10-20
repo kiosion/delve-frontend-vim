@@ -159,9 +159,9 @@ runs the program to its end. To pause a running program, run
 ==============================================================================
 5. BREAKPOINTS                                    *delve-frontend-breakpoints*
 
-|:DelveFrontendBreakpoint| sets a breakpoint on the cursor line, or clears the
-breakpoint there. |:DelveFrontendConditionalBreakpoint| asks for a Go
-expression, and the program stops on the line only when the expression is
+|:DelveFrontendToggleBreakpoint| sets a breakpoint on the cursor line, or
+clears the breakpoint there. |:DelveFrontendConditionalBreakpoint| asks for a
+Go expression, and the program stops on the line only when the expression is
 true. A sign marks each breakpoint, see |delve-frontend-highlights|. The sign
 moves with the line when you edit the file.
 
@@ -169,8 +169,8 @@ A breakpoint set while the program runs takes effect at once. The helper
 halts the program, sets the breakpoint and continues. When dlv rejects a
 breakpoint, Vim prints dlv's error.
 
-|:DelveFrontendBreakpoints| lists every breakpoint, in open files and saved
-ones, in the |quickfix| list.
+|:DelveFrontendListBreakpoints| lists every breakpoint, in open files and
+saved ones, in the |quickfix| list.
 
 						*delve-frontend-state*
 The plugin saves the breakpoints of each file, by absolute path, in
@@ -302,12 +302,12 @@ Output pane, at the right.
 		environment of its launch, and the current breakpoints and
 		watches.
 
-						*:DelveFrontendBreakpoints*
-:DelveFrontendBreakpoints
+					   *:DelveFrontendListBreakpoints*
+:DelveFrontendListBreakpoints
 		Put every breakpoint in the |quickfix| list, and open it.
 
-						*:DelveFrontendBreakpoint*
-:DelveFrontendBreakpoint
+					  *:DelveFrontendToggleBreakpoint*
+:DelveFrontendToggleBreakpoint
 		Set a breakpoint on the cursor line, or clear the breakpoint
 		there.
 
@@ -365,8 +365,8 @@ because the commands take no range.
 	|:DelveFrontendRunTest|
 *<Plug>(delve-frontend-debug-test)*
 	|:DelveFrontendDebugTest|
-*<Plug>(delve-frontend-breakpoint)*
-	|:DelveFrontendBreakpoint|
+*<Plug>(delve-frontend-toggle-breakpoint)*
+	|:DelveFrontendToggleBreakpoint|
 *<Plug>(delve-frontend-conditional-breakpoint)*
 	|:DelveFrontendConditionalBreakpoint|
 *<Plug>(delve-frontend-continue)*
@@ -383,8 +383,8 @@ because the commands take no range.
 	|:DelveFrontendStop|
 *<Plug>(delve-frontend-restart)*
 	|:DelveFrontendRestart|
-*<Plug>(delve-frontend-breakpoints)*
-	|:DelveFrontendBreakpoints|
+*<Plug>(delve-frontend-list-breakpoints)*
+	|:DelveFrontendListBreakpoints|
 *<Plug>(delve-frontend-evaluate)*
 	|:DelveFrontendEvaluate|
 *<Plug>(delve-frontend-watch)*
@@ -393,7 +393,7 @@ because the commands take no range.
 Example: >
 	nmap <Leader>tt <Plug>(delve-frontend-run-test)
 	nmap <Leader>td <Plug>(delve-frontend-debug-test)
-	nmap <Leader>db <Plug>(delve-frontend-breakpoint)
+	nmap <Leader>db <Plug>(delve-frontend-toggle-breakpoint)
 	nmap <Leader>dc <Plug>(delve-frontend-continue)
 	nmap <Leader>dn <Plug>(delve-frontend-next)
 	nmap <Leader>ds <Plug>(delve-frontend-step)
