@@ -6,8 +6,8 @@ const breakpointGroup = 'delve_frontend_breakpoint'
 const stopGroup = 'delve_frontend_stop'
 
 var channel: channel = null_channel
-# helperState is 'building' while the helper builds, and 'failed' after a build or a
-# missing helper was reported.
+# helperState is 'building' while a helper build runs, and 'failed' after the plugin
+# reported a failed build or a missing helper.
 var helperState = ''
 var terminal = 0
 
@@ -15,7 +15,8 @@ var terminal = 0
 # current one, or 0 when no program is being debugged.
 var launches = 0
 var session = 0
-# generation changes on each stop, and replies for an earlier stop are dropped.
+# generation changes on each launch, stop, resume and session end. Replies requested
+# before the change are dropped.
 var generation = 0
 # Window IDs of the debug tab, by pane: source, frames, goroutines, variables, output.
 var tab: dict<number> = {}
@@ -48,9 +49,9 @@ var nodes: list<dict<any>> = []
 var conditions: dict<string> = {}
 # Sign IDs of the breakpoints sent to the helper in the current session.
 var sent: dict<bool> = {}
-# Sign IDs of the breakpoints sent since the last stop. dlv sets a breakpoint sent
-# while the program runs at the next halt, and the helper reports a rejection as an
-# error event.
+# Sign IDs of the breakpoints sent since the last stop. The helper sets a breakpoint
+# sent while the program runs when the program next stops, and reports a rejection as
+# an error event.
 var pending: dict<bool> = {}
 var watches: list<any> = []
 # The breakpoints and watches kept across Vim restarts. saved holds the breakpoints of
@@ -66,8 +67,9 @@ var stateCorrupt = false
 var stateWriteWarned = false
 
 # Channel returns the channel of the helper, and starts the helper when it is not
-# running. When the helper is building or failed, it returns null_channel, and warns
-# unless quiet is true.
+# running. It returns null_channel while a helper build runs or after a failure, and
+# warns unless quiet is true. It also returns null_channel when it starts a build or
+# finds no executable helper, and prints a message in both cases.
 def Channel(quiet = false): channel
   if ch_status(channel) == 'open'
     return channel
@@ -85,7 +87,7 @@ def Channel(quiet = false): channel
   endif
   if !executable(helper)
     helperState = 'failed'
-    Warn($'no helper at {helper}')
+    Warn($'g:delve_frontend_helper: {helper} is missing or not executable')
     return null_channel
   endif
   # Vim can call exit_cb before the last output, and close_cb before the exit.
@@ -104,8 +106,8 @@ enddef
 
 # HelperProblem returns why the helper cannot answer requests, or an empty string.
 def HelperProblem(): string
-  return helperState == 'building' ? 'the helper is building'
-    : helperState == 'failed' ? 'the helper is unavailable, see :messages' : ''
+  return helperState == 'building' ? 'the helper build is still running'
+    : helperState == 'failed' ? 'the helper is unavailable (see :messages)' : ''
 enddef
 
 def HelperExited(run: dict<any>)
@@ -192,8 +194,8 @@ export def Refresh(buf: number)
 enddef
 
 def Located(buf: number, tick: number, resp: dict<any>)
-  # A reply for an older version of the buffer is dropped. The request for the
-  # current version is already on its way.
+  # A reply for an older version of the buffer is dropped, because TextChanged or
+  # InsertLeave requests the newer one.
   if !bufexists(buf) || getbufvar(buf, 'changedtick') != tick || !empty(get(resp, 'error', ''))
     return
   endif
@@ -226,7 +228,7 @@ export def TestAtCursor(): dict<any>
 enddef
 
 # RunTest runs the test at the cursor with go test in a terminal window below the
-# others. The window from the previous run closes when that run has finished.
+# others. It first wipes the terminal of the previous run when that run has finished.
 export def RunTest()
   const test = TestAtCursor()
   if empty(test)
@@ -265,8 +267,8 @@ export def Debug(args: string)
   Launch('debug', [], 'Building', {arg_line: args})
 enddef
 
-# Restart starts the last session again, with the build flags and environment of its
-# launch, and the current breakpoints and watches.
+# Restart repeats the last launch, with its directory, build flags and environment, and
+# with the current breakpoints and watches.
 export def Restart()
   if empty(lastLaunch)
     Warn('no session to restart')
@@ -287,11 +289,11 @@ enddef
 
 def ChooseProcess(processes: list<dict<any>>)
   if empty(processes)
-    Warn('no Go processes')
+    Warn('no Go processes to attach to')
     return
   endif
   popup_menu(processes->mapnew((_, p) => $'{p.pid}  {p.name}  {p.command}'[: &columns - 12]), {
-    title: ' Attach to ',
+    title: ' Attach to process ',
     callback: (_, choice) => ProcessChosen(processes, choice),
   })
 enddef
@@ -307,8 +309,9 @@ export def Connect(addr: string)
   Launch('connect', [], $'Connecting to {addr}', {addr: addr})
 enddef
 
-# Launch starts a session. It sends the breakpoints in the module of the session
-# directory, or in that directory when it is outside a module.
+# Launch starts a session with the breakpoints in the module of the session directory,
+# or in that directory when it is outside a module. It loads the saved files there
+# first, because Breakpoints reads signs, and only loaded buffers have signs.
 def Launch(mode: string, args: list<string>, title: string, extra: dict<any> = {})
   const ch = Channel()
   if ch_status(ch) != 'open'
@@ -396,8 +399,8 @@ def Notify(msg: dict<any>)
   endif
 enddef
 
-# EndSession clears the current line, the inline values and the panes, and shows text
-# in the frames pane.
+# EndSession clears the current line, the inline values and every pane except the
+# output pane, and shows text in the frames pane.
 def EndSession(text: string)
   session = 0
   ++generation
@@ -701,7 +704,8 @@ export def SaveState()
 enddef
 
 # ReadState returns the breakpoints and watches in the state file, without breakpoints
-# that lack a line number. It throws an error when the file holds no state.
+# that lack a line number. It returns an empty state for an empty file, and throws on
+# invalid JSON or a value of another shape.
 def ReadState(): dict<any>
   const text = join(readfile(stateFile), '')
   const state = empty(text) ? {} : json_decode(text)
@@ -738,8 +742,9 @@ def LoadState()
   endtry
 enddef
 
-# OpenTab opens the debug tab, or goes to it. The source window fills the top, and the
-# frames, variables and output panes share the bottom.
+# OpenTab opens the debug tab, or goes to it. The source window is at the top. Below
+# it, from left to right, are the frames pane over the goroutines pane, the variables
+# pane and the output pane.
 def OpenTab()
   if win_gotoid(get(tab, 'source', 0))
     return
