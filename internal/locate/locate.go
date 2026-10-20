@@ -28,12 +28,12 @@ type Test struct {
 	Args []string `json:"args"`
 }
 
-// File returns the tests in the Go source src, read from path. Struct types that src
-// does not declare are looked up in the other files of the package directory.
+// File returns the tests in src, the content of the Go file at path. It looks up the
+// types that src uses but does not declare in the other files of the package directory.
+// When src fails to parse, File returns the tests declared before the error, and a nil
+// error.
 func File(path string, src []byte) ([]Test, error) {
 	fset := token.NewFileSet()
-	// A file being edited often fails to parse. The parser still returns the
-	// declarations before the error, and the locator finds tests in them.
 	file, err := parser.ParseFile(fset, path, src, parser.SkipObjectResolution|parser.ParseComments)
 	if file == nil {
 		return nil, err

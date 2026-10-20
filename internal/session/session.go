@@ -45,13 +45,13 @@ type Config struct {
 	// Args are go test flags such as -run in test mode, and program arguments in debug
 	// mode.
 	Args []string `json:"args"`
-	// Dlv is the dlv command.
+	// Dlv is the name or path of the dlv executable.
 	Dlv string `json:"dlv"`
-	// Breakpoints are set before the program starts.
+	// Breakpoints are set before the session first continues the program.
 	Breakpoints []Breakpoint `json:"breakpoints"`
 	// Watches are the expressions to evaluate at each stop.
 	Watches []string `json:"watches"`
-	// Grouping groups the goroutines of each stopped event.
+	// Grouping is the goroutine grouping of each stopped event.
 	Grouping Grouping `json:"grouping"`
 	// BuildFlags are passed to go build, in test and debug mode.
 	BuildFlags []string `json:"build_flags"`
@@ -83,8 +83,8 @@ type Frame struct {
 
 // Node is one variable in the variables tree, shown as Name = Value.
 type Node struct {
-	// ID identifies the node in Children requests. It is 0 for the row that stands for
-	// the elements that were not loaded.
+	// ID identifies the node in Children and SetValue calls. It is 0 for the row that
+	// stands for the elements that were not loaded.
 	ID int `json:"id"`
 	// Name is the variable name, or the key or index of an element.
 	Name string `json:"name"`
@@ -105,7 +105,7 @@ type Event struct {
 	Event string `json:"event"`
 	// Text is the output line or the error message.
 	Text string `json:"text,omitempty"`
-	// Breakpoint is the ID of the breakpoint that an error event reports dlv rejected.
+	// Breakpoint is the ID of the breakpoint that dlv rejected, in an error event.
 	Breakpoint int `json:"breakpoint,omitempty"`
 	// Status is the exit status of the program, or of dlv when the program did not run.
 	Status int `json:"status,omitempty"`
@@ -117,7 +117,7 @@ type Event struct {
 	Goroutines []GoroutineGroup `json:"goroutines,omitempty"`
 	// Frame is the index of the selected frame in Frames.
 	Frame int `json:"frame,omitempty"`
-	// View shows the selected frame.
+	// View is the variables, watches and inline values of the selected frame.
 	View
 }
 
@@ -142,9 +142,9 @@ type Grouping struct {
 	//   - start: the function the goroutine started in.
 	//   - label: the value of the pprof label Key.
 	By string `json:"by"`
-	// Key is the pprof label that groups goroutines by label.
+	// Key is the pprof label key when By is label.
 	Key string `json:"key"`
-	// ShowRuntime lists the goroutines of the runtime with the user goroutines.
+	// ShowRuntime is whether the groups include runtime goroutines.
 	ShowRuntime bool `json:"show_runtime"`
 }
 
@@ -173,7 +173,8 @@ type GoroutineGroup struct {
 type Goroutine struct {
 	// ID is the goroutine ID.
 	ID int64 `json:"id"`
-	// Status is running, runnable, syscall or waiting, followed by the wait reason.
+	// Status is running, runnable, syscall or waiting. The last two are followed by ": "
+	// and the wait reason when dlv reports one. It is empty for other states.
 	Status string `json:"status"`
 	// Location is the innermost frame of the goroutine outside the runtime.
 	Location Frame `json:"location"`
@@ -236,7 +237,8 @@ type Session struct {
 	client *rpc2.RPCClient
 	// pending holds breakpoint changes by ID until dlv can apply them. A zero
 	// Breakpoint clears the breakpoint.
-	pending     map[int]Breakpoint
+	pending map[int]Breakpoint
+	// breakpoints maps each Breakpoint.ID to the ID of its dlv breakpoint.
 	breakpoints map[int]int
 	running     bool
 	// command is the running command, and run counts the commands started.
@@ -262,8 +264,9 @@ type node struct {
 	frame int
 }
 
-// Launch starts or connects to dlv for cfg and runs the program to the first
-// breakpoint. notify receives each event, from any goroutine.
+// Launch starts dlv for cfg, or connects to it in connect mode, and returns at once. A
+// goroutine then runs the program to the first breakpoint, and reports failures as
+// events. notify receives each event, from any goroutine.
 func Launch(cfg Config, notify func(Event)) (*Session, error) {
 	var args []string
 	switch cfg.Mode {
@@ -496,21 +499,21 @@ func (s *Session) runningCommand(run int) bool {
 func (s *Session) createLocked(bp Breakpoint) error {
 	created, err := s.client.CreateBreakpoint(&api.Breakpoint{File: bp.File, Line: bp.Line, Cond: bp.Cond})
 	if err != nil {
-		return fmt.Errorf("breakpoint at %s:%d: %w", filepath.Base(bp.File), bp.Line, err)
+		return fmt.Errorf("set breakpoint at %s:%d: %w", filepath.Base(bp.File), bp.Line, err)
 	}
 	s.breakpoints[bp.ID] = created.ID
 	return nil
 }
 
-// SetBreakpoint sets bp, or replaces the breakpoint with the same ID. While the
-// program runs, it halts the program, sets bp and continues, and reports errors as
-// error events.
+// SetBreakpoint sets bp, or replaces the breakpoint with the same ID. While the program
+// runs, it reports errors as error events. During a continue, it halts the program,
+// sets bp and continues. During a step, it sets bp when the step ends.
 func (s *Session) SetBreakpoint(bp Breakpoint) error {
 	return s.changeBreakpoint(bp.ID, bp)
 }
 
-// ClearBreakpoint clears the breakpoint with the given ID, halting a running program
-// as SetBreakpoint does.
+// ClearBreakpoint clears the breakpoint with the given ID. While the program runs, it
+// applies the change as SetBreakpoint does.
 func (s *Session) ClearBreakpoint(id int) error {
 	return s.changeBreakpoint(id, Breakpoint{})
 }
@@ -563,7 +566,7 @@ func (s *Session) clearLocked(id int) error {
 }
 
 // Resume runs command, one of continue, next, step and stepout. It returns at once, and
-// a Stopped or Exited event follows.
+// a stopped or exited event follows.
 func (s *Session) Resume(command string) error {
 	if _, ok := commands[command]; !ok {
 		return fmt.Errorf("unknown command %q", command)
@@ -647,9 +650,9 @@ func (s *Session) handleStop(state *api.DebuggerState, err error) {
 	s.notify(s.stoppedEventLocked(s.goroutine != -1 && state.SelectedGoroutine == nil))
 }
 
-// stoppedEventLocked describes the goroutine s.goroutine and selects its first frame,
-// or with user its first frame outside the runtime. It reports errors as error events,
-// and leaves out what it failed to load.
+// stoppedEventLocked describes the goroutine s.goroutine and selects its first frame, or
+// its first frame outside the runtime when user is true. It reports errors as error
+// events, and leaves out what it failed to load.
 func (s *Session) stoppedEventLocked(user bool) Event {
 	event := Event{Event: "stopped", Goroutine: s.goroutine}
 	var err error
@@ -767,8 +770,9 @@ func (s *Session) exitLocked(status int) {
 	s.release(s.client, status)
 }
 
-// release ends the connection to dlv. In connect mode no dlv process exits, and
-// release reports the exit with status.
+// release ends the connection to dlv. It kills the program in test and debug mode, and
+// leaves it running in attach mode. In connect mode, where no dlv process exits, it
+// clears the breakpoints, disconnects and reports the exit with status.
 func (s *Session) release(client *rpc2.RPCClient, status int) {
 	switch s.mode {
 	case "connect":
@@ -784,7 +788,7 @@ func (s *Session) release(client *rpc2.RPCClient, status int) {
 	}
 }
 
-// Pause stops the running program. A Stopped event follows.
+// Pause stops the running program. A stopped event follows.
 func (s *Session) Pause() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -796,9 +800,9 @@ func (s *Session) Pause() error {
 	return nil
 }
 
-// Stop ends the session. It kills a program that dlv started, and leaves other
-// programs running. When the program does not stop for the detach, Stop kills dlv, or
-// closes the connection in connect mode.
+// Stop ends the session. It kills the program in test and debug mode, and leaves it
+// running in attach and connect mode. When a running program does not halt within
+// haltTimeout, Stop kills dlv, or closes the connection in connect mode.
 func (s *Session) Stop() {
 	s.mu.Lock()
 	if s.stopping || s.status != nil {

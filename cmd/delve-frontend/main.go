@@ -108,7 +108,7 @@ type params struct {
 	Watches []string `json:"watches"`
 	// Grouping is the goroutine grouping of a grouping request.
 	Grouping session.Grouping `json:"grouping"`
-	// Value is the Go expression of a set request, which assigns it to the variable ID.
+	// Value is the Go expression that a set request assigns to the variable of node ID.
 	Value string `json:"value"`
 	// Path and Text are the file path and buffer text of a locate request.
 	Path string `json:"path"`
@@ -121,7 +121,8 @@ func (s *server) handle(req request) (any, error) {
 		var p struct {
 			session.Config
 			Session int `json:"session"`
-			// ArgLine holds program arguments as one line, split as a shell splits it.
+			// ArgLine is the program arguments as one line, which splitArgs splits as a
+			// POSIX shell does. It replaces Args when set.
 			ArgLine string `json:"arg_line"`
 		}
 		if err := json.Unmarshal(req.Params, &p); err != nil {

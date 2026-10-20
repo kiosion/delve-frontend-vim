@@ -167,8 +167,8 @@ func TestSession(t *testing.T) {
 	}
 }
 
-// tree lists the variables below the top-level variable s, expanded in full, as
-// "path = value" lines.
+// tree returns a "path = value" line for each node, with the top-level variable s
+// expanded in full.
 func tree(t *testing.T, s *Session, nodes []Node, prefix string) []string {
 	t.Helper()
 	var lines []string
@@ -202,7 +202,7 @@ func TestAttach(t *testing.T) {
 	file, lineOf := source(t, "testdata/sleeper/main.go")
 	bin := filepath.Join(t.TempDir(), "sleeper")
 	if out, err := exec.Command("go", "build", "-gcflags=all=-N -l", "-o", bin, "./testdata/sleeper").CombinedOutput(); err != nil {
-		t.Fatalf("build the sleeper: %v\n%s", err, out)
+		t.Fatalf("build sleeper: %v\n%s", err, out)
 	}
 	sleeper := exec.Command(bin)
 	if err := sleeper.Start(); err != nil {

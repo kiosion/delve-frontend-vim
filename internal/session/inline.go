@@ -16,13 +16,13 @@ const maxInlineValue = 60
 type Inline struct {
 	// Line is the 1-based line in the source file of the frame.
 	Line int `json:"line"`
-	// Text lists the variables as "name = value" pairs.
+	// Text is the variables of the line as comma-separated "name = value" pairs.
 	Text string `json:"text"`
 }
 
-// inlineValues returns the values of vars on each line of the function around path:line,
-// from the start of the function to line. An identifier shows the value of the variable
-// it resolves to, matched by the line of its declaration.
+// inlineValues returns the values of vars on each line of the innermost function around
+// path:line, from the start of the function to line. Each identifier gets the value of
+// the variable it resolves to, matched by name and declaration line.
 func inlineValues(path string, line int, vars []api.Variable) []Inline {
 	fset := token.NewFileSet()
 	file, _ := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)

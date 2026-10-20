@@ -35,7 +35,7 @@ func TestRefusesDebugger(t *testing.T) {
 	}{
 		{"linker signature", nil, false},
 		{"hardened runtime", []string{"-o", "runtime"}, true},
-		{"hardened runtime with get-task-allow", []string{"-o", "runtime", "--entitlements", entitlements("true")}, false},
+		{"hardened runtime with get-task-allow true", []string{"-o", "runtime", "--entitlements", entitlements("true")}, false},
 		{"hardened runtime with get-task-allow false", []string{"-o", "runtime", "--entitlements", entitlements("false")}, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
