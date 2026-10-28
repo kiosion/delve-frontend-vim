@@ -10,6 +10,8 @@ endif
 g:loaded_delve_frontend = 1
 
 highlight default link DelveFrontendTest Special
+highlight default link DelveFrontendTestPassed String
+highlight default link DelveFrontendTestFailed ErrorMsg
 highlight default link DelveFrontendBreakpoint ErrorMsg
 highlight default link DelveFrontendCurrentLineSign WarningMsg
 highlight default link DelveFrontendCurrentLine CursorLine
@@ -18,6 +20,14 @@ prop_type_add('DelveFrontendInlineValue', {highlight: 'DelveFrontendInlineValue'
 sign_define('DelveFrontendTest', {
   text: get(g:, 'delve_frontend_test_sign', "▶"),
   texthl: 'DelveFrontendTest',
+})
+sign_define('DelveFrontendTestPassed', {
+  text: get(g:, 'delve_frontend_test_passed_sign', "✓"),
+  texthl: 'DelveFrontendTestPassed',
+})
+sign_define('DelveFrontendTestFailed', {
+  text: get(g:, 'delve_frontend_test_failed_sign', "✗"),
+  texthl: 'DelveFrontendTestFailed',
 })
 sign_define('DelveFrontendBreakpoint', {text: "●", texthl: 'DelveFrontendBreakpoint'})
 sign_define('DelveFrontendConditionalBreakpoint', {text: "◆", texthl: 'DelveFrontendBreakpoint'})

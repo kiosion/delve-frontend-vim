@@ -9,7 +9,9 @@ var channel: channel = null_channel
 # helperState is 'building' while a helper build runs, and 'failed' after the plugin
 # reported a failed build or a missing helper.
 var helperState = ''
-var terminal = 0
+# testRuns numbers each test run. Output of a run that a newer run replaced is dropped.
+var testRuns = 0
+var testJob: job = null_job
 
 # The debug session. launches numbers each launch, and session is the number of the
 # current one, or 0 when no program is being debugged.
@@ -199,14 +201,21 @@ def Located(buf: number, tick: number, resp: dict<any>)
   if !bufexists(buf) || getbufvar(buf, 'changedtick') != tick || !empty(get(resp, 'error', ''))
     return
   endif
-  const tests: list<dict<any>> = resp.result
-  setbufvar(buf, 'delve_frontend_tests', tests)
+  setbufvar(buf, 'delve_frontend_tests', resp.result)
+  PlaceTestSigns(buf)
+enddef
+
+# PlaceTestSigns marks each test in buffer buf with the result of its last run, or with
+# the test sign when it has not run.
+def PlaceTestSigns(buf: number)
+  const results = getbufvar(buf, 'delve_frontend_results', {})
+  const signs = {pass: 'DelveFrontendTestPassed', fail: 'DelveFrontendTestFailed'}
   sign_unplace('delve_frontend', {buffer: buf})
   const priority = get(g:, 'delve_frontend_sign_priority', 5)
-  sign_placelist(tests->mapnew((_, test) => ({
+  sign_placelist(getbufvar(buf, 'delve_frontend_tests', [])->mapnew((_, test) => ({
     buffer: buf,
     group: 'delve_frontend',
-    name: 'DelveFrontendTest',
+    name: get(signs, get(results, test.name, ''), 'DelveFrontendTest'),
     lnum: test.line,
     priority: priority,
   })))
@@ -227,8 +236,10 @@ export def TestAtCursor(): dict<any>
   return best
 enddef
 
-# RunTest runs the test at the cursor with go test in a terminal window below the
-# others. It first wipes the terminal of the previous run when that run has finished.
+# RunTest runs the test at the cursor with go test, and shows its output in the results
+# window at the bottom. When the run ends, the window shows a summary and the output of
+# each failed test above the full output, and the sign of each test that ran shows its
+# result. A run started while another runs stops the other.
 export def RunTest()
   const test = TestAtCursor()
   if empty(test)
@@ -236,14 +247,123 @@ export def RunTest()
     return
   endif
   const dir = expand('%:p:h')
-  const cmd = get(g:, 'delve_frontend_go', ['go']) + ['test', '-v']
-    + Setting('delve_frontend_build_flags', []) + test.args + ['.']
   const env = Setting('delve_frontend_env', {})
-  if bufexists(terminal) && term_getstatus(terminal) =~ 'finished'
-    execute 'bwipeout' terminal
+  const cmd = get(g:, 'delve_frontend_go', ['go']) + ['test', '-json']
+    + Setting('delve_frontend_build_flags', []) + test.args + ['.']
+  if job_status(testJob) == 'run'
+    job_stop(testJob)
   endif
-  execute $'botright :{get(g:, 'delve_frontend_terminal_rows', 15)}new'
-  terminal = term_start(cmd, {curwin: true, cwd: dir, env: env, term_name: $'go test {test.name}'})
+  testRuns += 1
+  final run = {
+    id: testRuns,
+    test: test,
+    buf: bufnr(),
+    package: '',
+    results: {},
+    elapsed: {},
+    failed: [],
+    outputs: {},
+    unparsed: [],
+    lines: [],
+  }
+  ShowResults([$'Running {test.name}', ''])
+  testJob = job_start(cmd, {
+    cwd: dir,
+    env: env,
+    callback: (_, line) => TestEvent(run, line),
+    close_cb: (_) => TestFinished(run),
+  })
+  if job_status(testJob) == 'fail'
+    SetLines('results', [$'Cannot run {join(cmd)}'])
+  endif
+enddef
+
+# TestEvent records one line of go test -json output. Lines that are not test events,
+# such as compiler errors, are kept as they are.
+def TestEvent(run: dict<any>, line: string)
+  if run.id != testRuns
+    return
+  endif
+  var event: any
+  try
+    event = json_decode(line)
+  catch
+  endtry
+  if type(event) != v:t_dict || !has_key(event, 'Action')
+    run.unparsed->add(line)
+    run.lines->add(line)
+    Append('results', line)
+    return
+  endif
+  const name = get(event, 'Test', '')
+  if event.Action == 'output' || event.Action == 'build-output'
+    const text = substitute(event.Output, '\n$', '', '')
+    if !empty(name)
+      run.outputs[name] = get(run.outputs, name, [])->add(text)
+    elseif event.Action == 'build-output'
+      run.unparsed->add(text)
+    endif
+    run.lines->add(text)
+    Append('results', text)
+  elseif index(['pass', 'fail', 'skip'], event.Action) < 0
+    return
+  elseif empty(name)
+    run.package = event.Action
+  else
+    run.results[name] = event.Action
+    run.elapsed[name] = get(event, 'Elapsed', 0.0)
+    if event.Action == 'fail'
+      run.failed->add(name)
+    endif
+  endif
+enddef
+
+def TestFinished(run: dict<any>)
+  if run.id != testRuns
+    return
+  endif
+  const verdict = run.package == 'pass' ? 'PASS' : 'FAIL'
+  var header = $'{verdict}  {run.test.name}'
+  if has_key(run.elapsed, run.test.name)
+    header ..= printf('  (%.2fs)', run.elapsed[run.test.name])
+  endif
+  const results = values(run.results)
+  var lines = [header, printf('%d passed, %d failed, %d skipped',
+    results->count('pass'), results->count('fail'), results->count('skip')), '']
+  # A parent test fails with its subtests, so only the innermost failures have output
+  # worth showing.
+  for name in run.failed
+    if run.failed->indexof((_, other) => stridx(other, name .. '/') == 0) < 0
+      lines += get(run.outputs, name, [])->copy()->filter((_, l) => l !~ '^=== \u\+ ') + ['']
+    endif
+  endfor
+  if verdict == 'FAIL' && empty(run.failed) && !empty(run.unparsed)
+    lines += run.unparsed + ['']
+  endif
+  SetLines('results', lines + ['Output', ''] + run.lines)
+  echo header
+  if bufexists(run.buf)
+    setbufvar(run.buf, 'delve_frontend_results',
+      extend(getbufvar(run.buf, 'delve_frontend_results', {}), run.results))
+    PlaceTestSigns(run.buf)
+  endif
+enddef
+
+# ShowResults opens the results window at the bottom of the current tab page unless it
+# is open there, and replaces its text with lines. The cursor stays in its window.
+def ShowResults(lines: list<string>)
+  const buf = ScratchBuffer('results')
+  if win_findbuf(buf)->indexof((_, win) => win_id2tabwin(win)[0] == tabpagenr()) < 0
+    const win = win_getid()
+    execute $'botright :{get(g:, 'delve_frontend_results_rows', 15)}split'
+    execute 'buffer' buf
+    setlocal nonumber norelativenumber signcolumn=no foldcolumn=0 nowrap nolist nospell winfixheight
+    syntax clear
+    syntax match DelveFrontendTestPassed /^\s*\(--- \)\=\(PASS\|ok\)\>.*/
+    syntax match DelveFrontendTestFailed /^\s*\(--- \)\=\(FAIL\|panic:\).*/
+    win_gotoid(win)
+  endif
+  SetLines('results', lines)
 enddef
 
 def Setting(name: string, default: any): any
@@ -386,7 +506,7 @@ def Notify(msg: dict<any>)
     return
   endif
   if msg.event == 'output'
-    AppendOutput(msg.text)
+    Append('output', msg.text)
   elseif msg.event == 'stopped'
     pending = {}
     Stopped(msg, true)
@@ -778,7 +898,9 @@ def TabClosed()
   endif
 enddef
 
-def Pane(name: string)
+# ScratchBuffer returns the buffer of the pane name, and creates it when it is not
+# loaded.
+def ScratchBuffer(name: string): number
   if !bufloaded(get(buffers, name, -1))
     const buf = bufadd($'delve-frontend://{name}')
     setbufvar(buf, '&buftype', 'nofile')
@@ -789,7 +911,11 @@ def Pane(name: string)
     setbufvar(buf, '&modifiable', 0)
     buffers[name] = buf
   endif
-  execute 'buffer' buffers[name]
+  return buffers[name]
+enddef
+
+def Pane(name: string)
+  execute 'buffer' ScratchBuffer(name)
   tab[name] = win_getid()
   setlocal nonumber norelativenumber signcolumn=no foldcolumn=0 nowrap nolist nospell winfixheight
   if name == 'frames'
@@ -816,8 +942,10 @@ def SetLines(name: string, lines: list<string>)
   setbufvar(buf, '&modifiable', 0)
 enddef
 
-def AppendOutput(text: string)
-  const buf = get(buffers, 'output', -1)
+# Append adds text to the end of the pane name, and scrolls each window that shows it
+# to the end.
+def Append(name: string, text: string)
+  const buf = get(buffers, name, -1)
   if !bufloaded(buf)
     return
   endif
@@ -828,9 +956,9 @@ def AppendOutput(text: string)
     appendbufline(buf, '$', text)
   endif
   setbufvar(buf, '&modifiable', 0)
-  if win_id2tabwin(get(tab, 'output', 0))[0] > 0
-    win_execute(tab.output, 'normal! G')
-  endif
+  for win in win_findbuf(buf)
+    win_execute(win, 'normal! G')
+  endfor
 enddef
 
 def SelectFrame()

@@ -50,8 +50,9 @@ The plugin builds its helper the first time you open a `_test.go` file (see
 To run one test, subtest or table case:
 
 1. Move the cursor into the test.
-2. Run |:DelveFrontendRunTest|. A terminal window opens at the bottom and
-   runs `go test -v` with the flags that select the test.
+2. Run |:DelveFrontendRunTest|. A results window opens at the bottom and
+   shows the output of `go test` with the flags that select the test. When
+   the run ends, the signs of the tests that ran show `✓` or `✗`.
 
 To debug it:
 
@@ -310,11 +311,14 @@ Output pane, at the right.
 
 						*:DelveFrontendRunTest*
 :DelveFrontendRunTest
-		Run the test at the cursor with `go test -v` in a terminal
-		window at the bottom of the screen, in the directory of the
-		current file. See |delve-frontend-tests| for the flags. A
-		terminal window from an earlier run closes first when that run
-		has finished.
+		Run the test at the cursor with `go test -json`, in the
+		directory of the current file. See |delve-frontend-tests| for
+		the flags. The results window at the bottom of the screen
+		shows the output while the test runs. When the run ends, the
+		window shows the result, the number of tests that passed,
+		failed and were skipped, and the output of each failed test,
+		above the full output. The sign of each test that ran shows
+		its result. A run started while another runs stops the other.
 
 						*:DelveFrontendDebugTest*
 :DelveFrontendDebugTest
@@ -505,6 +509,14 @@ g:delve_frontend_test_sign	String. Default: `'▶'`
 	The sign text for a test. Set it in your |vimrc|, because the plugin
 	reads it only when the plugin loads.
 
+					*g:delve_frontend_test_passed_sign*
+g:delve_frontend_test_passed_sign	String. Default: `'✓'`
+					*g:delve_frontend_test_failed_sign*
+g:delve_frontend_test_failed_sign	String. Default: `'✗'`
+	The sign texts for a test that passed or failed in its last run.
+	Set them in your |vimrc|, because the plugin reads them only when the
+	plugin loads.
+
 					*g:delve_frontend_sign_priority*
 g:delve_frontend_sign_priority	Number. Default: `5`
 	The priority of test signs. ALE uses 30 and vim-gitgutter 10 by
@@ -514,9 +526,9 @@ g:delve_frontend_sign_priority	Number. Default: `5`
 g:delve_frontend_breakpoint_priority	Number. Default: `40`
 	The priority of breakpoint signs. The current line sign uses 50.
 
-					*g:delve_frontend_terminal_rows*
-g:delve_frontend_terminal_rows	Number. Default: `15`
-	The height of the terminal window of |:DelveFrontendRunTest|.
+					*g:delve_frontend_results_rows*
+g:delve_frontend_results_rows	Number. Default: `15`
+	The height of the results window of |:DelveFrontendRunTest|.
 
 						*g:delve_frontend_pane_rows*
 g:delve_frontend_pane_rows	Number. Default: `15`
@@ -527,6 +539,8 @@ g:delve_frontend_pane_rows	Number. Default: `15`
 
 	Sign   Marks                      Highlight group ~
 	`▶`      a test                     DelveFrontendTest
+	`✓`      a test that passed         DelveFrontendTestPassed
+	`✗`      a test that failed         DelveFrontendTestFailed
 	`●`      a breakpoint               DelveFrontendBreakpoint
 	`◆`      a conditional breakpoint   DelveFrontendBreakpoint
 	`→`      the current line           DelveFrontendCurrentLineSign
@@ -536,6 +550,8 @@ scheme to change it.
 
 	Group                            Default link  Use ~
 	*hl-DelveFrontendTest*             Special       test signs
+	*hl-DelveFrontendTestPassed*       String        passed signs and results
+	*hl-DelveFrontendTestFailed*       ErrorMsg      failed signs and results
 	*hl-DelveFrontendBreakpoint*       ErrorMsg      breakpoint signs
 	*hl-DelveFrontendCurrentLineSign*  WarningMsg    the current line sign
 	*hl-DelveFrontendCurrentLine*      CursorLine    the current line
